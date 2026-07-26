@@ -34,6 +34,9 @@ async function withRetry(operation, context) {
         err.name === "ThrottlingException" ||
         err.name === "RequestLimitExceeded" ||
         err.name === "ServiceUnavailableException" ||
+        err.code === "ECONNRESET" ||
+        err.code === "ENETUNREACH" ||
+        err.code === "ETIMEDOUT" ||
         err.$metadata?.httpStatusCode === 429;
 
       if (!isRetryable || attempt === 3) {
