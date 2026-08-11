@@ -25,7 +25,8 @@
 ```bash
 # 1. 安装 Node.js（推荐使用 nvm）
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | sh
-reboot
+# 安装完成后重新加载配置文件，使 nvm 命令生效（无需重启）
+source ~/.bashrc
 nvm install --lts
 npm i pm2 -g
 
