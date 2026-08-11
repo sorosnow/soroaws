@@ -10,7 +10,7 @@
   "main": "index.js",
   "scripts": {
     "start": "nodemon index.js",
-    "build": "npm i  && pm2 start index.js -n sailx --log-date-format=\"YYYY-MM-DD HH:mm:ss\""
+    "build": "pm2 start index.js -n sailx --log-date-format=\"YYYY-MM-DD HH:mm:ss\""
   },
   "type": "commonjs",
   "repository": {
