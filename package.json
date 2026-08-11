@@ -5,7 +5,7 @@
     "dotenv": "^17.4.2"
   },
   "name": "sailx",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "自动检测 AWS Lightsail 实例 IP 连通性，被阻断时自动更换",
   "main": "index.js",
   "scripts": {
