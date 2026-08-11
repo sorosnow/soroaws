@@ -53,19 +53,35 @@ async function withRetry(operation, context) {
 }
 
 async function fetchInstances(client) {
-  return withRetry(async () => {
-    const command = new GetInstancesCommand({});
-    const response = await client.send(command);
-    return response.instances || [];
-  }, "获取实例列表");
+  const instances = [];
+  let pageToken;
+
+  do {
+    const response = await withRetry(async () => {
+      const command = new GetInstancesCommand(pageToken ? { pageToken } : {});
+      return await client.send(command);
+    }, "获取实例列表");
+    instances.push(...(response.instances || []));
+    pageToken = response.nextPageToken;
+  } while (pageToken);
+
+  return instances;
 }
 
 async function fetchStaticIps(client) {
-  return withRetry(async () => {
-    const command = new GetStaticIpsCommand({});
-    const response = await client.send(command);
-    return response.staticIps || [];
-  }, "获取静态 IP 列表");
+  const staticIps = [];
+  let pageToken;
+
+  do {
+    const response = await withRetry(async () => {
+      const command = new GetStaticIpsCommand(pageToken ? { pageToken } : {});
+      return await client.send(command);
+    }, "获取静态 IP 列表");
+    staticIps.push(...(response.staticIps || []));
+    pageToken = response.nextPageToken;
+  } while (pageToken);
+
+  return staticIps;
 }
 
 async function detachStaticIp(client, staticIpName) {

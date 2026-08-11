@@ -4,22 +4,22 @@
     "axios": "^1.3.2",
     "dotenv": "^17.4.2"
   },
-  "name": "lightsail-ip-rotator",
+  "name": "sailx",
   "version": "1.0.1",
   "description": "自动检测 AWS Lightsail 实例 IP 连通性，被阻断时自动更换",
   "main": "index.js",
   "scripts": {
     "start": "nodemon index.js",
-    "build": "npm i  && pm2 start index.js -n lightsail --log-date-format=\"YYYY-MM-DD HH:mm:ss\""
+    "build": "npm i  && pm2 start index.js -n sailx --log-date-format=\"YYYY-MM-DD HH:mm:ss\""
   },
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sororain/lightsail-ip-rotator.git"
+    "url": "https://github.com/sororain/sailx.git"
   },
   "author": "sororain",
   "license": "GPL-3.0",
   "devDependencies": {
-    "nodemon": "2.0.20"
+    "nodemon": "^3.1.14"
   }
 }

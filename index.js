@@ -61,9 +61,6 @@ async function getInstances() {
 
 /**
  * 检测指定实例 IP 连通性，不可达时自动更换
- */
-/**
- * 检测指定实例 IP 连通性，不可达时自动更换
  * @returns {Promise<{server: object, status: string}>}
  */
 async function checkIp(client, server) {
@@ -124,6 +121,7 @@ async function rotateStaticIp(client, server) {
 
 /**
  * 分配新静态 IP 并绑定到实例
+ * 成功返回 { oldIp, newIp }，失败抛出异常（并发送失败告警通知）
  */
 async function allocateAndAttach(client, server) {
   const oldIp = server.publicIpAddress;
@@ -134,7 +132,15 @@ async function allocateAndAttach(client, server) {
     await allocateStaticIp(client, staticIpName);
   } catch (err) {
     log("ERROR", `创建静态 IP 失败: ${err.message}`);
-    return;
+    await sendMsgByServerChan({
+      instanceName: server.name,
+      region: server.location?.regionName || "未知",
+      oldIp,
+      newIp: staticIpName,
+      success: false,
+      reason: err.message,
+    });
+    throw err;
   }
   log("INFO", "创建静态 IP 成功！");
 
@@ -143,21 +149,36 @@ async function allocateAndAttach(client, server) {
     await attachStaticIp(client, server.name, staticIpName);
   } catch (err) {
     log("ERROR", `绑定静态 IP 失败: ${err.message}`);
-    return;
+    // 回滚：释放刚分配但未绑定的静态 IP，避免产生闲置费用
+    try {
+      await releaseStaticIp(client, staticIpName);
+      log("INFO", `已回滚释放未绑定的静态 IP: ${staticIpName}`);
+    } catch (releaseErr) {
+      log("ERROR", `回滚释放静态 IP ${staticIpName} 失败: ${releaseErr.message}`);
+    }
+    await sendMsgByServerChan({
+      instanceName: server.name,
+      region: server.location?.regionName || "未知",
+      oldIp,
+      newIp: staticIpName,
+      success: false,
+      reason: err.message,
+    });
+    throw err;
   }
 
   log("INFO", "绑定新 IP 成功！");
 
-  // 获取新 IP 的实际地址
+  // 获取新 IP 的实际地址（查询实例最新公网 IP）
   let newIp = staticIpName;
   try {
-    const ips = await fetchStaticIps(client);
-    const matched = ips.find((ip) => ip.name === staticIpName);
-    if (matched && matched.ipAddress) {
-      newIp = matched.ipAddress;
+    const servers = await fetchInstances(client);
+    const matched = servers.find((s) => s.name === server.name);
+    if (matched && matched.publicIpAddress) {
+      newIp = matched.publicIpAddress;
     }
   } catch (err) {
-    log("WARN", `获取新 IP 地址失败，使用名称代替: ${err.message}`);
+    log("WARN", `获取新 IP 地址失败，请到 AWS 控制台确认: ${err.message}`);
   }
 
   await sendMsgByServerChan({
@@ -209,7 +230,7 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 // ============================================================
 
 async function main() {
-  log("INFO", `lightsail-ip-rotator 启动，检测间隔: ${config.interval} 分钟`);
+  log("INFO", `SailX 启动，检测间隔: ${config.interval} 分钟`);
 
   // 启动时先清理一次未附加静态 IP
   log("INFO", "正在检查未附加的静态 IP...");

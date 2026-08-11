@@ -25,7 +25,7 @@ function systemPing(host, timeout) {
 }
 
 /**
- * 检测指定主机 IP 连通性（150秒内持续 Ping，有一次回复即判定为通）
+ * 检测指定主机 IP 连通性（PING_TIMEOUT 秒内持续 Ping，有一次回复即判定为通）
  * @param {string} host - 目标 IP 地址
  * @param {Function} onReachable - IP 可达时的回调
  * @param {Function} onUnreachable - IP 不可达时的回调函数
@@ -42,7 +42,7 @@ async function checkConnectivity(host, onReachable, onUnreachable) {
       if (result.alive) {
         log("INFO", `${host} Ping 通，跳过本轮检测`);
         if (onReachable) onReachable();
-        return; // 有回复立即结束，不等60秒
+        return; // 有回复立即结束，不等到期
       }
 
       // 还没到截止时间，等 1 秒再试

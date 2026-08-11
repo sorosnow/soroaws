@@ -1,4 +1,4 @@
-# lightsail-ip-rotator
+# SailX
 
 定时检测 AWS Lightsail 实例 IP 连通性，当 IP 被阻断时自动更换。
 
@@ -30,8 +30,8 @@ nvm install --lts
 npm i pm2 -g
 
 # 2. 下载项目
-git clone https://github.com/sororain/lightsail-ip-rotator.git
-cd lightsail-ip-rotator
+git clone https://github.com/sororain/sailx.git
+cd sailx
 
 # 3. 安装依赖
 npm install
@@ -52,7 +52,7 @@ cp .env.example .env
 | `AWS_REGIONS` | 否 | `ap-northeast-1` | AWS 区域，多个用逗号分隔 |
 | `PING_TIMEOUT` | 否 | `15` | Ping 检测时长（秒），持续发包，全丢才算不通 |
 | `CHECK_INTERVAL_MIN` | 否 | `1` | 检测间隔（分钟） |
-| `SERVER_CHAN_TOKEN` | 否 | - | Server酱 推送 Token |
+| `SERVER_CHAN_TOKEN` | 否 | - | Server酱 推送 Token（更换成功/失败都会收到通知） |
 
 ## 运行
 
@@ -68,14 +68,15 @@ PM2 管理命令：
 
 ```bash
 pm2 list               # 查看进程列表
-pm2 logs lightsail     # 查看日志
-pm2 restart lightsail  # 重启
-pm2 stop lightsail     # 停止
+pm2 logs sailx         # 查看日志
+pm2 restart sailx      # 重启
+pm2 stop sailx         # 停止
 ```
 
 ## 日志
 
 所有日志统一写入项目根目录的 `lightsail.log` 文件，同时输出到控制台。
+IP 更换事件（`CHANGE` 级别）会额外单独记录到 `changes.log` 文件，便于快速检索更换历史。
 
 ### 日志级别
 
@@ -89,12 +90,12 @@ pm2 stop lightsail     # 停止
 ### 日志示例
 
 ```
-[2026/6/3 12:00:00] [INFO] lightsail-ip-rotator 启动，检测间隔: 1 分钟
+[2026/6/3 12:00:00] [INFO] SailX 启动，检测间隔: 1 分钟
 [2026/6/3 12:00:00] [INFO] 开始新一轮 IP 检查
 [2026/6/3 12:00:01] [INFO] 正在持续 Ping 1.2.3.4（最长 15 秒）
 [2026/6/3 12:00:02] [INFO] 1.2.3.4 Ping 通，跳过本轮检测
 [2026/6/3 12:02:30] [WARN] 5.6.7.8 持续 15 秒 Ping 无回复，判定为不通
-[2026/6/3 12:02:31] [INFO] 正在解绑静态 IP: StaticIp-xxx (5.6.7.8)
+[2026/6/3 12:02:31] [INFO] 正在解绑静态 IP: my-instance-1685765000000 (5.6.7.8)
 [2026/6/3 12:02:33] [CHANGE] my-instance IP已更换 5.6.7.8 → 9.10.11.12
 [2026/6/3 12:02:34] [INFO] 本轮检查完成: 1 个可达, 1 个已更换, 0 个失败
 ```
@@ -102,11 +103,11 @@ pm2 stop lightsail     # 停止
 ## 项目结构
 
 ```
-lightsail-ip-rotator/
+sailx/
 ├── index.js       # 入口文件，业务流程编排
 ├── config.js      # 配置管理（环境变量读取）
 ├── lightsail.js   # AWS Lightsail API 操作封装
-├── checker.js     # TCP 连通性检测
+├── checker.js     # IP 连通性检测（系统 Ping）
 ├── notifier.js    # 消息通知（Server酱）
 ├── logger.js      # 本地日志记录
 ├── .env.example   # 环境变量模板

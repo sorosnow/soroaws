@@ -1,4 +1,4 @@
-# lightsail-ip-rotator 优化计划
+# SailX 优化计划
 
 ## 📁 代码结构
 
@@ -118,3 +118,43 @@ ${server.name}-${Date.now()}
 ### 14. 按实例配置端口  🔒 已弃用
 ~~不同实例可能需要检测不同端口（SSH=22, RDP=3389, HTTP=80）~~
 现已改用 Ping 检测，不依赖端口，此项不再需要。
+
+---
+
+## 🐛 问题修复（2026-08-11）
+
+### 15. 绑定失败被误统计为"已更换"  ✅ 已修复
+`allocateAndAttach` 在创建/绑定静态 IP 失败时只是 `return`（不抛错），导致 `checkIp` 的 try/catch 捕获不到，最终仍被计为 `changed`。
+- 失败时改为抛出异常，`checkIp` 正确标记为 `failed`
+- 绑定失败时自动回滚释放刚分配但未绑定的静态 IP，避免产生闲置费用
+
+### 16. 失败路径发送 Server酱 告警  ✅ 已修复
+原先只在成功时发送通知，更换失败用户无感知。
+- `sendMsgByServerChan` 新增 `success` / `reason` 参数
+- 失败时标题带 `【失败】` 前缀、正文含失败原因，记录 `[ERROR]` 日志
+
+### 17. API 未分页  ✅ 已修复
+`fetchInstances` / `fetchStaticIps` 只取单页响应，超过 AWS 单页上限（100 条）会漏检。
+- 改为通过 `nextPageToken` 循环拉取全部数据
+
+### 18. `newIp` 兜底逻辑  ✅ 已修复
+原先获取新 IP 失败时用静态 IP 名称代替地址推送，可读性差。
+- 改为重新查询实例最新公网 IP，地址更准确
+- 仍失败时提示"请到 AWS 控制台确认"
+
+### 19. 日志写入串行化  ✅ 已修复
+`logger.js` 每次独立 `appendFile`，高并发下日志可能乱序。
+- 引入写入队列，串行落盘
+
+### 20. 遗留注释与代码不符  ✅ 已修复
+- `checker.js` 注释写"150 秒/60 秒"，实际是 `PING_TIMEOUT`（默认 15 秒）
+- `index.js` 存在重复的 JSDoc 注释块
+
+### 21. 依赖安全漏洞  ✅ 已修复
+`npm audit` 检出 3 个高危漏洞（`nodemon@2.0.20` → `simple-update-notifier` → `semver` ReDoS）。
+- 升级 `nodemon` 至 `3.1.14`，`npm audit` 结果为 0 漏洞
+
+### 22. 补充说明
+- `.env.example` 确认已存在且完整（此前误判缺失）
+- 模块语法检查、加载验证全部通过
+- 尚未进行真实 AWS 端到端验证（需国内服务器 + 真实凭证 + 现有实例）
