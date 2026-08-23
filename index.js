@@ -284,7 +284,7 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 // ============================================================
 
 async function main() {
-  log("INFO", `Resail 启动，检测间隔: ${config.interval} 分钟`);
+  log("INFO", `SwapX 启动，检测间隔: ${config.interval} 分钟`);
 
   // 启动时先清理一次未附加静态 IP
   log("INFO", "正在检查未附加的静态 IP...");
