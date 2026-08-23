@@ -16,6 +16,9 @@ const config = {
   // 检测间隔（分钟），默认 1
   interval: parseFloat(process.env.CHECK_INTERVAL_MIN || "1"),
 
+  // 同一区域并行更换 IP 的最大并发数，默认 2（避免触发 AWS 限流）
+  rotateConcurrency: parseInt(process.env.ROTATE_CONCURRENCY || "2", 10),
+
   // Server酱 推送 Token（可选，留空不推送）
   serverChanToken: process.env.SERVER_CHAN_TOKEN || "",
 };
@@ -41,6 +44,9 @@ function validateConfig() {
   }
   if (Number.isNaN(config.interval) || config.interval < 1) {
     errors.push("CHECK_INTERVAL_MIN 必须大于 0");
+  }
+  if (Number.isNaN(config.rotateConcurrency) || config.rotateConcurrency < 1) {
+    errors.push("ROTATE_CONCURRENCY 必须是不小于 1 的整数");
   }
 
   return errors;

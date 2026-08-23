@@ -14,6 +14,48 @@ const { log } = require("./logger");
 const config = require("./config");
 
 // ============================================================
+// 换 IP 并发控制（按区域独立限流）
+// ============================================================
+
+/**
+ * 创建并发限制器：同一时间最多执行 max 个任务，其余排队等待
+ * @param {number} max - 最大并发数
+ * @returns {Function} run - (fn) => Promise，fn 的结果/异常原样透传
+ */
+function createLimiter(max) {
+  let active = 0;
+  const queue = [];
+
+  const next = () => {
+    if (active >= max || queue.length === 0) return;
+    const task = queue.shift();
+    active++;
+    task.fn()
+      .then(task.resolve, task.reject)
+      .finally(() => {
+        active--;
+        next();
+      });
+  };
+
+  return (fn) =>
+    new Promise((resolve, reject) => {
+      queue.push({ fn, resolve, reject });
+      next();
+    });
+}
+
+// 每个区域（client）一个独立的限制器：大量实例同时不可达时，
+// 换 IP 操作排队执行，避免并发 AWS 调用触发限流
+const regionLimiters = new Map();
+function getRegionLimiter(client) {
+  if (!regionLimiters.has(client)) {
+    regionLimiters.set(client, createLimiter(config.rotateConcurrency));
+  }
+  return regionLimiters.get(client);
+}
+
+// ============================================================
 // 业务流程编排
 // ============================================================
 
@@ -46,7 +88,7 @@ async function getInstances() {
 
   // 等待所有检测完成并输出汇总
   const checkResults = await Promise.allSettled(allChecks);
-  const stats = { reachable: 0, changed: 0, failed: 0 };
+  const stats = { reachable: 0, changed: 0, failed: 0, skipped: 0 };
 
   for (const r of checkResults) {
     if (r.status === "fulfilled") {
@@ -56,16 +98,24 @@ async function getInstances() {
     }
   }
 
-  log("INFO", `本轮检查完成: ${stats.reachable} 个可达, ${stats.changed} 个已更换, ${stats.failed} 个失败`);
+  log("INFO", `本轮检查完成: ${stats.reachable} 个可达, ${stats.changed} 个已更换, ${stats.failed} 个失败, ${stats.skipped} 个跳过`);
 }
 
 /**
  * 检测指定实例 IP 连通性，不可达时自动更换
- * @returns {Promise<{server: object, status: string}>}
+ * @returns {Promise<{server: object, status: "reachable"|"changed"|"failed"|"skipped"}>}
  */
-async function checkIp(client, server) {
+function checkIp(client, server) {
   return new Promise((resolve) => {
     const host = server.publicIpAddress;
+    const state = server.state?.name || "未知";
+
+    // 已停止/无公网 IP 的实例 Ping 必然失败，直接跳过，不触发换 IP
+    if (!host || state !== "running") {
+      log("INFO", `${server.name} 状态为 ${state}${host ? "" : "、无公网 IP"}，跳过检测`);
+      return resolve({ server, status: "skipped" });
+    }
+
     log("INFO", `正在检查 ${server.name} (${host}) 连通性`);
 
     checkConnectivity(
@@ -76,14 +126,18 @@ async function checkIp(client, server) {
       async () => {
         log("INFO", `${server.name} (${host}) IP不可达，开始更换`);
         try {
-          if (server.isStaticIp) {
-            await rotateStaticIp(client, server);
-          } else {
-            await allocateAndAttach(client, server);
-          }
+          // 换 IP 操作经区域限制器排队执行，控制同时进行的更换数量
+          const runRotate = getRegionLimiter(client);
+          await runRotate(async () => {
+            if (server.isStaticIp) {
+              await rotateStaticIp(client, server);
+            } else {
+              await allocateAndAttach(client, server);
+            }
+          });
           resolve({ server, status: "changed" });
         } catch (err) {
-          log("ERROR", `${host} IP更换失败: ${err.message}`);
+          log("ERROR", `${server.name} (${host}) IP更换失败: ${err.message}`);
           resolve({ server, status: "failed" });
         }
       }
@@ -136,7 +190,7 @@ async function allocateAndAttach(client, server) {
       instanceName: server.name,
       region: server.location?.regionName || "未知",
       oldIp,
-      newIp: staticIpName,
+      newIp: "-",
       success: false,
       reason: err.message,
     });
@@ -160,7 +214,7 @@ async function allocateAndAttach(client, server) {
       instanceName: server.name,
       region: server.location?.regionName || "未知",
       oldIp,
-      newIp: staticIpName,
+      newIp: "-",
       success: false,
       reason: err.message,
     });
@@ -169,8 +223,8 @@ async function allocateAndAttach(client, server) {
 
   log("INFO", "绑定新 IP 成功！");
 
-  // 获取新 IP 的实际地址（查询实例最新公网 IP）
-  let newIp = staticIpName;
+  // 获取新 IP 的实际地址（查询实例最新公网 IP），失败时以 "-" 兜底
+  let newIp = "-";
   try {
     const servers = await fetchInstances(client);
     const matched = servers.find((s) => s.name === server.name);
@@ -230,7 +284,7 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 // ============================================================
 
 async function main() {
-  log("INFO", `SailX 启动，检测间隔: ${config.interval} 分钟`);
+  log("INFO", `Resail 启动，检测间隔: ${config.interval} 分钟`);
 
   // 启动时先清理一次未附加静态 IP
   log("INFO", "正在检查未附加的静态 IP...");

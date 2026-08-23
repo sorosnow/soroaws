@@ -1,4 +1,4 @@
-# SailX
+# Resail
 
 定时检测 AWS Lightsail 实例 IP 连通性，当 IP 被阻断时自动更换。
 
@@ -7,7 +7,7 @@
 ## 工作原理
 
 1. 获取所有 Lightsail 实例列表
-2. 对每个实例的 IP 进行持续 Ping 检测（15 秒内，有任一回复即视为可达）
+2. 对每个实例的 IP 进行持续 Ping 检测（15 秒内，有任一回复即视为可达；已停止或无公网 IP 的实例自动跳过）
 3. 如果 IP 不可达，自动执行更换流程：
    - **已有静态 IP** → 解绑旧 IP → 释放旧 IP → 分配新 IP → 绑定新 IP
    - **无静态 IP** → 直接分配新静态 IP → 绑定
@@ -31,8 +31,8 @@ nvm install --lts
 npm i pm2 -g
 
 # 2. 下载项目
-git clone https://github.com/sororain/sailx.git
-cd sailx
+git clone https://github.com/sororain/resail.git
+cd resail
 
 # 3. 安装依赖
 npm install
@@ -53,6 +53,7 @@ cp .env.example .env
 | `AWS_REGIONS` | 否 | `ap-northeast-1` | AWS 区域，多个用逗号分隔 |
 | `PING_TIMEOUT` | 否 | `15` | Ping 检测时长（秒），持续发包，全丢才算不通 |
 | `CHECK_INTERVAL_MIN` | 否 | `1` | 检测间隔（分钟） |
+| `ROTATE_CONCURRENCY` | 否 | `2` | 同一区域并行更换 IP 的最大并发数 |
 | `SERVER_CHAN_TOKEN` | 否 | - | Server酱 推送 Token（更换成功/失败都会收到通知） |
 
 ## 运行
@@ -69,9 +70,9 @@ PM2 管理命令：
 
 ```bash
 pm2 list               # 查看进程列表
-pm2 logs sailx         # 查看日志
-pm2 restart sailx      # 重启
-pm2 stop sailx         # 停止
+pm2 logs resail         # 查看日志
+pm2 restart resail      # 重启
+pm2 stop resail         # 停止
 ```
 
 ## 日志
@@ -91,20 +92,20 @@ IP 更换事件（`CHANGE` 级别）会额外单独记录到 `changes.log` 文�
 ### 日志示例
 
 ```
-[2026/6/3 12:00:00] [INFO] SailX 启动，检测间隔: 1 分钟
+[2026/6/3 12:00:00] [INFO] Resail 启动，检测间隔: 1 分钟
 [2026/6/3 12:00:00] [INFO] 开始新一轮 IP 检查
 [2026/6/3 12:00:01] [INFO] 正在持续 Ping 1.2.3.4（最长 15 秒）
 [2026/6/3 12:00:02] [INFO] 1.2.3.4 Ping 通，跳过本轮检测
 [2026/6/3 12:02:30] [WARN] 5.6.7.8 持续 15 秒 Ping 无回复，判定为不通
 [2026/6/3 12:02:31] [INFO] 正在解绑静态 IP: my-instance-1685765000000 (5.6.7.8)
 [2026/6/3 12:02:33] [CHANGE] my-instance IP已更换 5.6.7.8 → 9.10.11.12
-[2026/6/3 12:02:34] [INFO] 本轮检查完成: 1 个可达, 1 个已更换, 0 个失败
+[2026/6/3 12:02:34] [INFO] 本轮检查完成: 1 个可达, 1 个已更换, 0 个失败, 0 个跳过
 ```
 
 ## 项目结构
 
 ```
-sailx/
+resail/
 ├── index.js       # 入口文件，业务流程编排
 ├── config.js      # 配置管理（环境变量读取）
 ├── lightsail.js   # AWS Lightsail API 操作封装
