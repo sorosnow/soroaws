@@ -1,4 +1,4 @@
-# SwapX
+# Cicada
 
 定时检测 AWS Lightsail 实例 IP 连通性，当 IP 被阻断时自动更换。
 
@@ -31,8 +31,8 @@ nvm install --lts
 npm i pm2 -g
 
 # 2. 下载项目
-git clone https://github.com/sororain/swapx.git
-cd swapx
+git clone https://github.com/sororain/cicada.git
+cd cicada
 
 # 3. 安装依赖
 npm install
@@ -70,9 +70,9 @@ PM2 管理命令：
 
 ```bash
 pm2 list               # 查看进程列表
-pm2 logs swapx         # 查看日志
-pm2 restart swapx      # 重启
-pm2 stop swapx         # 停止
+pm2 logs cicada         # 查看日志
+pm2 restart cicada      # 重启
+pm2 stop cicada         # 停止
 ```
 
 ## 日志
@@ -92,7 +92,7 @@ IP 更换事件（`CHANGE` 级别）会额外单独记录到 `changes.log` 文�
 ### 日志示例
 
 ```
-[2026/6/3 12:00:00] [INFO] SwapX 启动，检测间隔: 1 分钟
+[2026/6/3 12:00:00] [INFO] Cicada 启动，检测间隔: 1 分钟
 [2026/6/3 12:00:00] [INFO] 开始新一轮 IP 检查
 [2026/6/3 12:00:01] [INFO] 正在持续 Ping 1.2.3.4（最长 15 秒）
 [2026/6/3 12:00:02] [INFO] 1.2.3.4 Ping 通，跳过本轮检测
@@ -105,7 +105,7 @@ IP 更换事件（`CHANGE` 级别）会额外单独记录到 `changes.log` 文�
 ## 项目结构
 
 ```
-swapx/
+cicada/
 ├── index.js       # 入口文件，业务流程编排
 ├── config.js      # 配置管理（环境变量读取）
 ├── lightsail.js   # AWS Lightsail API 操作封装
