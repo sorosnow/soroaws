@@ -19,6 +19,9 @@ const config = {
   // 同一区域并行更换 IP 的最大并发数，默认 2（避免触发 AWS 限流）
   rotateConcurrency: parseInt(process.env.ROTATE_CONCURRENCY || "2", 10),
 
+  // 退出前等待在途操作完成的最长时间（秒），默认 120
+  shutdownGraceSec: parseInt(process.env.SHUTDOWN_GRACE_SEC || "120", 10),
+
   // Server酱 推送 Token（可选，留空不推送）
   serverChanToken: process.env.SERVER_CHAN_TOKEN || "",
 };
@@ -47,6 +50,9 @@ function validateConfig() {
   }
   if (Number.isNaN(config.rotateConcurrency) || config.rotateConcurrency < 1) {
     errors.push("ROTATE_CONCURRENCY 必须是不小于 1 的整数");
+  }
+  if (Number.isNaN(config.shutdownGraceSec) || config.shutdownGraceSec < 1) {
+    errors.push("SHUTDOWN_GRACE_SEC 必须是不小于 1 的整数");
   }
 
   return errors;

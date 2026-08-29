@@ -54,6 +54,7 @@ cp .env.example .env
 | `PING_TIMEOUT` | 否 | `15` | Ping 检测时长（秒），持续发包，全丢才算不通 |
 | `CHECK_INTERVAL_MIN` | 否 | `1` | 检测间隔（分钟） |
 | `ROTATE_CONCURRENCY` | 否 | `2` | 同一区域并行更换 IP 的最大并发数 |
+| `SHUTDOWN_GRACE_SEC` | 否 | `120` | 退出前等待在途换 IP 等操作完成的最长时间（秒） |
 | `SERVER_CHAN_TOKEN` | 否 | - | Server酱 推送 Token（更换成功/失败都会收到通知） |
 
 ## 运行

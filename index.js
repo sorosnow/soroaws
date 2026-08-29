@@ -243,6 +243,20 @@ async function allocateAndAttach(client, server) {
   });
 }
 
+/**
+ * 清理所有区域的未附加静态 IP（启动时与每 30 分钟各执行一次）
+ */
+async function cleanupAllRegions() {
+  log("INFO", "开始检查未附加静态 IP");
+  for (const client of clients) {
+    try {
+      await cleanupUnattachedIps(client);
+    } catch (err) {
+      log("ERROR", `清理未附加 IP 异常: ${err.message}`);
+    }
+  }
+}
+
 // ============================================================
 // 启动校验
 // ============================================================
@@ -256,24 +270,49 @@ if (configErrors.length > 0) {
 }
 
 // ============================================================
-// 优雅退出
+// 在途操作跟踪 + 优雅退出
 // ============================================================
+
+// 在途异步操作（检查轮次、换 IP、清理任务）。退出前等待其全部完成，
+// 避免把"解绑→释放→分配→绑定"流程截断在半截，留下已分配未附加的静态 IP
+const pendingOps = new Set();
+
+function track(promise) {
+  pendingOps.add(promise);
+  const done = () => pendingOps.delete(promise);
+  promise.then(done, done);
+  return promise;
+}
 
 let shuttingDown = false;
 let timer;
+let cleanupTimer;
 
-function shutdown(signal) {
-  if (shuttingDown) return;
+async function shutdown(signal) {
+  if (shuttingDown) {
+    log("ERROR", "再次收到退出信号，强制退出");
+    process.exit(1);
+  }
   shuttingDown = true;
 
-  log("INFO", `收到 ${signal} 信号，正在停止...`);
   clearInterval(timer);
+  clearInterval(cleanupTimer);
 
-  // 等待进行中的操作完成后退出
-  setTimeout(() => {
-    log("INFO", "程序已退出");
-    process.exit(0);
-  }, 5000).unref();
+  const ops = [...pendingOps];
+  if (ops.length > 0) {
+    log("INFO", `收到 ${signal} 信号，等待 ${ops.length} 个在途操作完成（最长 ${config.shutdownGraceSec} 秒）...`);
+    // 超过宽限期强制退出，防止个别操作挂死导致进程停不下来
+    await Promise.race([
+      Promise.allSettled(ops),
+      new Promise((r) => setTimeout(r, config.shutdownGraceSec * 1000).unref()),
+    ]);
+  } else {
+    log("INFO", `收到 ${signal} 信号，无在途操作，正在退出...`);
+  }
+
+  log("INFO", "程序已退出");
+  // 留 100ms 让日志写入队列落盘
+  setTimeout(() => process.exit(0), 100);
 }
 
 process.on("SIGINT", () => shutdown("SIGINT"));
@@ -287,30 +326,17 @@ async function main() {
   log("INFO", `Cicada 启动，检测间隔: ${config.interval} 分钟`);
 
   // 启动时先清理一次未附加静态 IP
-  log("INFO", "正在检查未附加的静态 IP...");
-  for (const client of clients) {
-    try {
-      await cleanupUnattachedIps(client);
-    } catch (err) {
-      log("ERROR", `清理未附加 IP 异常: ${err.message}`);
-    }
-  }
+  await track(cleanupAllRegions());
+  if (shuttingDown) return;
 
-  getInstances();
+  track(getInstances());
   timer = setInterval(() => {
-    getInstances();
+    track(getInstances());
   }, config.interval * 60 * 1000);
 
   // 每 30 分钟清理一次未附加静态 IP
-  setInterval(async () => {
-    log("INFO", "开始检查未附加静态 IP");
-    for (const client of clients) {
-      try {
-        await cleanupUnattachedIps(client);
-      } catch (err) {
-        log("ERROR", `清理未附加 IP 异常: ${err.message}`);
-      }
-    }
+  cleanupTimer = setInterval(() => {
+    track(cleanupAllRegions());
   }, 30 * 60 * 1000);
 }
 

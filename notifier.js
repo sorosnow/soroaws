@@ -45,6 +45,8 @@ async function sendMsgByServerChan(details = {}) {
     await axios.request({
       method: "POST",
       url: `https://sctapi.ftqq.com/${config.serverChanToken}.send`,
+      // 必须有超时：请求挂起会永久占住区域并发限制器槽位，卡死该区域后续换 IP
+      timeout: 10000,
       headers: { "Content-Type": "application/json" },
       data: {
         title: success
