@@ -10,7 +10,7 @@ const config = {
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
   },
 
-  // Ping 检测时长（秒），默认 15
+  // 本机 Ping 实例公网 IP 的检测总时长（秒），默认 15（期间持续 Ping，有任一回复即视为可达）
   pingTimeout: parseInt(process.env.PING_TIMEOUT || "15", 10),
 
   // 检测间隔（分钟），默认 1

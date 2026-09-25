@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const LOG_FILE = path.join(__dirname, "lightsail.log");
+const LOG_FILE = path.join(__dirname, "soroaws.log");
 const CHANGE_LOG = path.join(__dirname, "changes.log");
 
 // ANSI 颜色代码

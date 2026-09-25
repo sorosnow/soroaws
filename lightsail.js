@@ -10,22 +10,28 @@ const {
 const config = require("./config");
 const { log } = require("./logger");
 
-// 创建客户端，配置 AWS SDK 内置重试（最多 3 次，指数退避）
-const clients = config.regions.map(
-  (region) =>
-    new LightsailClient({
-      region,
-      credentials: config.credentials,
-      maxAttempts: 3,
-    })
-);
+// 每个区域一个客户端，连同区域名一起导出
+// （日志与告警需要区域名，而 AWS SDK v3 的 client.config.region 是 provider 函数，取不到字符串）
+// 客户端自身配置 SDK 内置重试（最多 3 次，指数退避）
+const clients = config.regions.map((region) => ({
+  region,
+  client: new LightsailClient({
+    region,
+    credentials: config.credentials,
+    maxAttempts: 3,
+  }),
+}));
+
+// 单个 API 调用的最大尝试次数（首次 + 重试），重试采用指数退避
+const MAX_ATTEMPTS = 3;
+const MAX_RETRIES = MAX_ATTEMPTS - 1;
 
 /**
  * 带重试的 API 调用包装（在 AWS SDK 内置重试之上增加日志）
  */
 async function withRetry(operation, context) {
   let lastError;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       return await operation();
     } catch (err) {
@@ -39,13 +45,14 @@ async function withRetry(operation, context) {
         err.code === "ETIMEDOUT" ||
         err.$metadata?.httpStatusCode === 429;
 
-      if (!isRetryable || attempt === 3) {
+      // 不可重试，或重试次数已用尽（attempt 从 1 起算，所以最后一次 attempt 不再重试）
+      if (!isRetryable || attempt === MAX_ATTEMPTS) {
         log("ERROR", `${context} 失败: ${err.message}`);
         throw err;
       }
 
       const delay = Math.pow(2, attempt) * 1000;
-      log("WARN", `${context} 限流，${delay / 1000}s 后重试 (${attempt}/2)`);
+      log("WARN", `${context} 限流，${delay / 1000}s 后发起第 ${attempt} 次重试（最多 ${MAX_RETRIES} 次）`);
       await new Promise((r) => setTimeout(r, delay));
     }
   }

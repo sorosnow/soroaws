@@ -1,5 +1,4 @@
 /node_modules
-lightsail.log
-changes.log
+*.log
 .env
 package-lock.json

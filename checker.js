@@ -1,13 +1,11 @@
 const { exec } = require("child_process");
 const os = require("os");
-const config = require("./config");
-const { log } = require("./logger");
 
 /**
- * 调用系统 ping 命令检测指定主机
+ * 调用系统 ping 命令检测指定主机（单次）
  * @param {string} host - 目标 IP 地址
  * @param {number} timeout - 单次超时秒数
- * @returns {Promise<{alive: boolean}>}
+ * @returns {Promise<boolean>} 是否有回复
  */
 function systemPing(host, timeout) {
   return new Promise((resolve) => {
@@ -19,44 +17,32 @@ function systemPing(host, timeout) {
 
     exec(cmd, (error) => {
       // error 非空表示 ping 不通（退出码非0）
-      resolve({ alive: !error });
+      resolve(!error);
     });
   });
 }
 
 /**
- * 检测指定主机 IP 连通性（PING_TIMEOUT 秒内持续 Ping，有一次回复即判定为通）
+ * 在给定时间窗口内持续 Ping 主机，有任一次回复即视为可达
  * @param {string} host - 目标 IP 地址
- * @param {Function} onReachable - IP 可达时的回调
- * @param {Function} onUnreachable - IP 不可达时的回调函数
+ * @param {number} seconds - 检测总时长（秒）
+ * @returns {Promise<boolean>} 是否有回复
  */
-async function checkConnectivity(host, onReachable, onUnreachable) {
-  log("INFO", `正在持续 Ping ${host}（最长 ${config.pingTimeout} 秒）`);
+async function pingHost(host, seconds) {
+  const deadline = Date.now() + seconds * 1000;
 
-  try {
-    const deadline = Date.now() + config.pingTimeout * 1000;
-
-    while (Date.now() < deadline) {
-      const result = await systemPing(host, 5);
-
-      if (result.alive) {
-        log("INFO", `${host} Ping 通，跳过本轮检测`);
-        if (onReachable) onReachable();
-        return; // 有回复立即结束，不等到期
-      }
-
-      // 还没到截止时间，等 1 秒再试
-      if (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 1000));
-      }
+  while (Date.now() < deadline) {
+    if (await systemPing(host, 5)) {
+      return true; // 有回复立即结束，不等到期
     }
 
-    log("WARN", `${host} 持续 ${config.pingTimeout} 秒 Ping 无回复，判定为不通`);
-    onUnreachable();
-  } catch (err) {
-    log("ERROR", `${host} Ping 检测异常: ${err.message}`);
-    onUnreachable();
+    // 还没到截止时间，等 1 秒再试
+    if (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
   }
+
+  return false;
 }
 
-module.exports = { checkConnectivity };
+module.exports = { systemPing, pingHost };
