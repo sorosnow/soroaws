@@ -2,7 +2,18 @@ require("dotenv").config();
 
 const config = {
   // AWS 区域（多个用逗号分隔，如 "ap-northeast-1,us-east-1"）
-  regions: (process.env.AWS_REGIONS || "ap-northeast-1").split(",").map((r) => r.trim()),
+  // 去重并剔除空项：尾随逗号、连续逗号（如 "ap-northeast-1,"）会产生空字符串，
+  // 而空区域名会让 LightsailClient 构造时抛 "Region is missing"，
+  // 使进程在校验之前就崩掉；重复区域则会生成两个同区域客户端，
+  // 导致同一实例被重复检查、甚至并发换 IP（限流器按客户端而非区域隔离，挡不住）
+  regions: [
+    ...new Set(
+      (process.env.AWS_REGIONS || "ap-northeast-1")
+        .split(",")
+        .map((r) => r.trim())
+        .filter(Boolean)
+    ),
+  ],
 
   // AWS 凭证
   credentials: {
@@ -39,8 +50,13 @@ function validateConfig() {
   if (!config.credentials.secretAccessKey) {
     errors.push("AWS_SECRET_ACCESS_KEY 未设置");
   }
-  if (config.regions.length === 0 || !config.regions[0]) {
+  if (config.regions.length === 0) {
     errors.push("AWS_REGIONS 未设置或格式不正确");
+  }
+  // 区域名格式校验：挡掉大小写错误、下划线、缺段等手误（如 ap_northeast_1、ap-northeast）
+  const invalidRegion = config.regions.find((r) => !/^[a-z]{2}(-[a-z]+)+-\d+$/.test(r));
+  if (invalidRegion) {
+    errors.push(`AWS_REGIONS 含无效区域名 "${invalidRegion}"，应形如 ap-northeast-1`);
   }
   if (Number.isNaN(config.pingTimeout) || config.pingTimeout < 1) {
     errors.push("PING_TIMEOUT 不是有效的数字");

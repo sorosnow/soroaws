@@ -105,6 +105,9 @@ async function getInstances() {
   roundRunning = true;
 
   try {
+    // 清理放在轮次开头：此刻没有在途换 IP，与换 IP 天然互斥（理由见 maybeCleanup）
+    await maybeCleanup();
+
     log("INFO", "开始新一轮 IP 检查");
 
     const { instances, failures } = await fetchAllInstances();
@@ -288,17 +291,38 @@ async function allocateAndAttach(region, client, server) {
 }
 
 /**
- * 清理所有区域的未附加静态 IP（启动时与每 30 分钟各执行一次）
+ * 清理所有区域的未附加静态 IP
  */
 async function cleanupAllRegions() {
   log("INFO", "开始检查未附加静态 IP");
-  for (const { client } of clients) {
+  for (const { region, client } of clients) {
     try {
       await cleanupUnattachedIps(client);
     } catch (err) {
-      log("ERROR", `清理未附加 IP 异常: ${err.message}`);
+      log("ERROR", `清理未附加 IP 异常 (${region}): ${err.message}`);
     }
   }
+}
+
+// 清理周期。清理会把区域内所有「未附加」的静态 IP 当垃圾释放，而换 IP 在
+// 「分配 → 绑定」之间存在短暂的新 IP 未附加窗口 —— 两者并发会让刚分配的新 IP
+// 被清理掉，绑定随即失败，实例最终失去静态 IP。
+//
+// 因此清理不再用独立定时器，而是放进轮次开头（见 getInstances）：
+// 轮次内的换 IP 都会被 await 完，下一轮开始时必然没有在途换 IP，天然互斥。
+const CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
+
+// 启动时已清理过一次，故以启动时刻作为周期起点
+let lastCleanupAt = Date.now();
+
+/**
+ * 距上次清理超过 CLEANUP_INTERVAL_MS 时执行一次清理
+ */
+async function maybeCleanup() {
+  const now = Date.now();
+  if (now - lastCleanupAt < CLEANUP_INTERVAL_MS) return;
+  lastCleanupAt = now;
+  await cleanupAllRegions();
 }
 
 // ============================================================
@@ -330,7 +354,6 @@ function track(promise) {
 
 let shuttingDown = false;
 let timer;
-let cleanupTimer;
 
 async function shutdown(signal) {
   if (shuttingDown) {
@@ -340,7 +363,6 @@ async function shutdown(signal) {
   shuttingDown = true;
 
   clearInterval(timer);
-  clearInterval(cleanupTimer);
 
   const ops = [...pendingOps];
   if (ops.length > 0) {
@@ -390,11 +412,6 @@ async function main() {
   timer = setInterval(() => {
     track(getInstances());
   }, config.interval * 60 * 1000);
-
-  // 每 30 分钟清理一次未附加静态 IP
-  cleanupTimer = setInterval(() => {
-    track(cleanupAllRegions());
-  }, 30 * 60 * 1000);
 }
 
 main();
