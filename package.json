@@ -15,9 +15,9 @@
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sorosnow/soroaws.git"
+    "url": "https://github.com/soroice/soroaws.git"
   },
-  "author": "sorosnow",
+  "author": "soroice",
   "license": "GPL-3.0",
   "devDependencies": {
     "nodemon": "^3.1.14"
