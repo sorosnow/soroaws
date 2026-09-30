@@ -38,7 +38,7 @@ nvm install --lts
 npm i pm2 -g
 
 # 2. 下载项目
-git clone https://github.com/soroice/soroaws.git
+git clone https://github.com/soroace/soroaws.git
 cd soroaws
 
 # 3. 安装依赖
